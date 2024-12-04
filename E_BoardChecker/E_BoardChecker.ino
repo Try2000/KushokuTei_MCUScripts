@@ -22,9 +22,10 @@ uint8_t sine_wave_pos[SAMPLES];
 uint8_t sine_wave_neg[SAMPLES];
 int sample_index = 0;
 bool isOutput = false;  // 出力を制御するフラグ
+unsigned long lastOutputTime = 0;  // 電流出力開始時間
+const unsigned long outputDuration = 1000; // 電流出力時間 (1秒)
 
 void onReceive(const uint8_t *mac_addr, const uint8_t *data, int len) {
-  // 将接收到的数据复制到结构体中
   // 受信したデータを構造体にコピーする
   memcpy(&receivedData, data, sizeof(receivedData));
   changeOutputState(true);
@@ -48,10 +49,11 @@ void setup() {
   Serial.begin(115200);  // シリアル通信の初期化
   Serial.println("準備完了: 'q'で電流出力をトグル");
 
-  WiFi.mode(WIFI_STA);  // 确保处于 STA 模式
-                        // STAモードであることを確認
-  WiFi.disconnect();    // 确保设备不连接到任何 Wi-Fi 网络
-                        // デバイスがどのWi-Fiネットワークにも接続しないようにする
+  WiFi.mode(WIFI_STA);  // STAモードであることを確認
+  WiFi.disconnect();    // デバイスがどのWi-Fiネットワークにも接続しないようにする
+   if (esp_now_init() == ESP_OK) {
+        Serial.println("ESP-Now Init Success");
+    }
   esp_now_register_recv_cb(onReceive);
 
   dac_output_enable(DAC_PIN_POS);
@@ -63,8 +65,12 @@ void setup() {
 
   generate_sine_wave();
 }
+
 void changeOutputState(bool isoutput) {
   isOutput = isoutput;
+  if (isOutput) {
+    lastOutputTime = millis();  // 出力開始時間を記録
+  }
   Serial.println(isOutput ? "電流出力ON" : "電流出力OFF");
 }
 
@@ -82,9 +88,9 @@ void loop() {
     }
   }
 
-
   // 正弦波出力
   if (isOutput) {
+    // 電流出力を行う
     dac_output_voltage(DAC_PIN_POS, sine_wave_pos[sample_index]);
     dac_output_voltage(DAC_PIN_NEG, sine_wave_neg[sample_index]);
 
@@ -93,6 +99,11 @@ void loop() {
 
     // サンプリング間隔を保つための遅延
     delayMicroseconds(SAMPLING_INTERVAL);  // サンプリング間隔を維持
+
+    // 1秒経過後に出力をオフ
+    if (millis() - lastOutputTime >= outputDuration) {
+      changeOutputState(false);
+    }
   } else {
     // 出力をオフにする
     dac_output_voltage(DAC_PIN_POS, 0);
