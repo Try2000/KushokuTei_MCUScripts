@@ -14,14 +14,14 @@ uint8_t broadcastMAC[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 // 定义发送的消息结构体
 typedef struct struct_message {
-  char message[50];
+  char message[15];
 } struct_message;
 
 struct_message myData;
 
 // 发送完成后的回调函数
 void onSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
-  M5.Lcd.printf("Last Packet Send Status: %s\n", status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
+  M5.Lcd.printf("Last Packet: %s\n", status == ESP_NOW_SEND_SUCCESS ? "Success" : "Fail");
 }
 
 void setup() {
@@ -42,7 +42,7 @@ void setup() {
   memset(&peerInfo, 0, sizeof(peerInfo));
 
   // 添加所有目标设备
-  uint8_t *receivers[] = {receiver1MAC, receiver2MAC, receiver3MAC, receiver4MAC, receiver5MAC};
+  uint8_t *receivers[] = {receiver1MAC, receiver2MAC, receiver3MAC, receiver4MAC,receiver5MAC};
   for (int i = 0; i < 5; i++) {
     memcpy(peerInfo.peer_addr, receivers[i], 6);
     peerInfo.channel = 1;
@@ -54,6 +54,15 @@ void setup() {
       M5.Lcd.printf("Peer %d added successfully\n", i + 1);
     }
   }
+  memcpy(peerInfo.peer_addr, broadcastMAC, 6);
+    peerInfo.channel = 0;
+    peerInfo.encrypt = false;
+
+    if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+      M5.Lcd.printf("Failed to add peer broad\n");
+    } else {
+      M5.Lcd.printf("Peer broad added successfully\n");
+    }
 }
 
 void loop() {
@@ -67,15 +76,14 @@ void loop() {
     M5.Lcd.setTextColor(GREEN, BLACK);
     M5.Lcd.setCursor(0, 40);
     M5.Lcd.printf("Broadcast: %s\n", myData.message);
-
-    // 向所有指定设备发送 "1"
-    strncpy(myData.message, "1", sizeof(myData.message));
+    delay(10);
     uint8_t *receivers[] = {receiver1MAC, receiver2MAC, receiver3MAC, receiver4MAC, receiver5MAC};
     for (int i = 0; i < 5; i++) {
       esp_now_send(receivers[i], (uint8_t *)&myData, sizeof(myData));
       M5.Lcd.printf("Sent to Peer %d: %s\n", i + 1, myData.message);
+      delay(50);
     }
-    delay(10);
+    delay(200);
   }
   if (Serial.available()) {
     String jsonData;
@@ -84,7 +92,7 @@ void loop() {
       jsonData += c;
       delay(10);  // 読み取りの安定性を確保するための短い遅延
     }
-
+    M5.Lcd.clear();
     // データがmessageのサイズを超えないように制限する
     jsonData.toCharArray(myData.message, sizeof(myData.message));
 
@@ -92,21 +100,20 @@ void loop() {
     M5.Lcd.setCursor(0, 40); // カーソルをさらに下に設定
     M5.Lcd.println(myData.message); // JSONデータを表示
 
-    esp_now_send(receiver4MAC, (uint8_t *)&myData, sizeof(myData));
+    esp_now_send(broadcastMAC, (uint8_t *)&myData, sizeof(myData));
     M5.Lcd.setTextColor(GREEN, BLACK);
     M5.Lcd.setCursor(0, 40);
     M5.Lcd.printf("Broadcast: %s\n", myData.message);
-
-    strncpy(myData.message, "1", sizeof(myData.message));//開口時
+    delay(50);
     uint8_t *receivers[] = {receiver1MAC, receiver2MAC, receiver3MAC, receiver4MAC, receiver5MAC};
     for (int i = 0; i < 5; i++) {
       esp_now_send(receivers[i], (uint8_t *)&myData, sizeof(myData));
-      M5.Lcd.printf("Sent to Peer %d: %s\n", i + 1, myData.message);
+      delay(50);
     }
 
     delay(100);  // 短い遅延を追加
   }
 
-  delay(300); // 控制发送间隔
+  delay(100); // 控制发送间隔
   M5.Lcd.setTextColor(RED, BLACK);
 }
